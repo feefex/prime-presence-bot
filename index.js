@@ -1,6 +1,11 @@
 // index.js
 import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
-import fetch from 'node-fetch';
+// index.js
+import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
+
+const TOKEN = process.env.BOT_TOKEN;
+const STATUS_URL = process.env.STATUS_URL;
+
 
 const TOKEN = process.env.BOT_TOKEN;
 const STATUS_URL = process.env.STATUS_URL;
