@@ -1,110 +1,78 @@
 // index.js
 import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
-// index.js
-import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
 
 const TOKEN = process.env.BOT_TOKEN;
 const STATUS_URL = process.env.STATUS_URL;
-
-
-const TOKEN = process.env.BOT_TOKEN;
-const STATUS_URL = process.env.STATUS_URL;
-
-// Atualiza a cada 15 segundos
-const UPDATE_INTERVAL_MS = 15_000;
-// Se o status.json ficar velho demais, consideramos OFFLINE (em segundos)
-const OFFLINE_THRESHOLD_SECONDS = 60;
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-function setOfflinePresence(reason = 'offline') {
-  if (!client.user) return;
+// Busca o status no seu status.json
+async function getStatus() {
+  try {
+    const res = await fetch(STATUS_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return data;
+  } catch (err) {
+    console.error('Erro ao buscar status:', err.message);
+    return null;
+  }
+}
 
-  const text =
-    reason === 'error'
-      ? '🔴 Servidor OFFLINE (indisponível)'
-      : '🔴 Servidor OFFLINE';
+// Atualiza a presença do bot
+async function updatePresence() {
+  const status = await getStatus();
 
-  client.user.setPresence({
-    status: 'dnd', // bolinha vermelha
+  // Qualquer problema => OFFLINE
+  if (
+    !status ||
+    !status.online ||
+    typeof status.players !== 'number' ||
+    typeof status.maxPlayers !== 'number'
+  ) {
+    await setOfflinePresence();
+    return;
+  }
+
+  const { players, maxPlayers } = status;
+
+  await client.user.setPresence({
+    status: 'online',
     activities: [
       {
-        name: text,
-        type: ActivityType.Watching, // "Assistindo"
+        type: ActivityType.Watching,
+        name: `🟢 ${players}/${maxPlayers} jogadores online`,
       },
     ],
   });
 
-  console.log(`Presença ajustada para: ${text}`);
+  console.log(`Atualizei presença: ${players}/${maxPlayers} online`);
 }
 
-async function updatePresence() {
-  if (!client.user) return;
+// Presença quando servidor estiver offline
+async function setOfflinePresence() {
+  await client.user.setPresence({
+    status: 'dnd',
+    activities: [
+      {
+        type: ActivityType.Watching,
+        name: '🔴 Servidor OFFLINE',
+      },
+    ],
+  });
 
-  try {
-    const res = await fetch(STATUS_URL, { timeout: 5000 });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-
-    // Tenta se adaptar a vários formatos possíveis do status.json
-    let players =
-      typeof data.players === 'number'
-        ? data.players
-        : typeof data.online === 'number'
-        ? data.online
-        : 0;
-
-    let maxPlayers =
-      typeof data.maxplayers === 'number'
-        ? data.maxplayers
-        : typeof data.max === 'number'
-        ? data.max
-        : 0;
-
-    const now = Math.floor(Date.now() / 1000);
-    const ts = typeof data.timestamp === 'number' ? data.timestamp : 0;
-    const isStale = ts && now - ts > OFFLINE_THRESHOLD_SECONDS;
-
-    const isExplicitOffline =
-      data.online === false ||
-      data.status === 'offline' ||
-      data.offline === true;
-
-    if (isExplicitOffline || isStale) {
-      setOfflinePresence('offline');
-      return;
-    }
-
-    // Se por algum motivo maxPlayers vier 0, evita dividir por 0 e só mostra players
-    const name =
-      maxPlayers > 0
-        ? `🟢 ${players}/${maxPlayers} jogadores online`
-        : `🟢 ${players} jogadores online`;
-
-    client.user.setPresence({
-      status: 'online',
-      activities: [
-        {
-          name,
-          type: ActivityType.Watching,
-        },
-      ],
-    });
-
-    console.log(`Presença: ${name}`);
-  } catch (err) {
-    console.error('Erro ao buscar status.json:', err.message);
-    setOfflinePresence('error');
-  }
+  console.log('Servidor OFFLINE – presença ajustada');
 }
 
+// Quando o bot logar
 client.once('ready', () => {
-  console.log(`Bot logado como ${client.user.tag}`);
+  console.log(`Logado como ${client.user.tag}`);
+
+  // Atualiza na hora e depois a cada 30s
   updatePresence();
-  setInterval(updatePresence, UPDATE_INTERVAL_MS);
+  setInterval(updatePresence, 30_000);
 });
 
 client.login(TOKEN);
