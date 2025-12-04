@@ -2,10 +2,8 @@
 // Simples: se o servidor estiver ONLINE → bot liga normalmente
 // Se o servidor estiver OFFLINE → bot NÃO inicia e encerra automaticamente
 
-import dotenv from 'dotenv'
-dotenv.config()
-
 import { Client, GatewayIntentBits, ActivityType } from 'discord.js'
+import Gamedig from 'gamedig'
 import Gamedig from 'gamedig'
 
 // ===========================
