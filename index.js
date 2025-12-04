@@ -1,97 +1,77 @@
 import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
-import fetch from 'node-fetch';
+import axios from 'axios';
 
 const token = process.env.BOT_TOKEN;
-const statusUrl = process.env.STATUS_URL;
+const STATUS_URL = process.env.STATUS_URL;
 
+// segurança básica
 if (!token) {
-  console.error('❌ BOT_TOKEN não definido nas variáveis de ambiente');
+  console.error('❌ BOT_TOKEN não definido');
   process.exit(1);
 }
-
-if (!statusUrl) {
-  console.error('❌ STATUS_URL não definido nas variáveis de ambiente');
+if (!STATUS_URL) {
+  console.error('❌ STATUS_URL não definido');
   process.exit(1);
 }
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+  intents: [GatewayIntentBits.Guilds]
 });
 
-function setOfflinePresence() {
-  client.user.setPresence({
-    activities: [
-      {
-        name: 'Servidor OFFLINE',
-        type: ActivityType.Custom,
-        state: '🔴 Servidor OFFLINE',
-      },
-    ],
-    status: 'dnd', // vermelho
-  });
-
-  console.log('🔴 Presença atualizada: Servidor OFFLINE');
-}
-
+// função que consulta o status.json e atualiza o bot
 async function updatePresence() {
   try {
-    const res = await fetch(statusUrl, {
-      headers: {
-        'Cache-Control': 'no-cache',
-      },
-    });
+    const response = await axios.get(STATUS_URL, { timeout: 5000 });
+    const { online, max, status } = response.data;
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    // Seu status.json hoje está assim:
-    // { "online": 2, "max": 100, "timestamp": 1764813350 }
-
-    const online = Number(data.online);
-    const max =
-      data.max !== undefined
-        ? Number(data.max)
-        : data.maxPlayers !== undefined
-        ? Number(data.maxPlayers)
-        : 0;
-
-    // Se não conseguiu ler números válidos, ou max <= 0, consideramos OFFLINE
-    if (!Number.isFinite(online) || !Number.isFinite(max) || max <= 0) {
-      setOfflinePresence();
+    // se não for "ok", tratamos como servidor OFFLINE
+    if (status !== 'ok') {
+      await client.user.setPresence({
+        status: 'dnd',
+        activities: [
+          {
+            name: 'Servidor OFFLINE',
+            type: ActivityType.Custom,
+            state: '🔴 Servidor OFFLINE'
+          }
+        ]
+      });
+      console.log('🔴 Servidor OFFLINE (status:', status, ')');
       return;
     }
 
-    const activityText = `${online}/${max} jogadores online`;
-
-    client.user.setPresence({
+    // status ok → servidor ONLINE, mostra players
+    await client.user.setPresence({
+      status: 'online',
       activities: [
         {
-          name: activityText,
-          type: ActivityType.Playing,
-        },
-      ],
-      // Mantém o status verde mesmo com 0 players
-      status: 'online',
+          name: `${online}/${max} jogadores online`,
+          type: ActivityType.Custom,
+          state: `🟢 ${online}/${max} jogadores online`
+        }
+      ]
     });
-
-    console.log(`🟢 Presença atualizada: ${activityText}`);
+    console.log(`🟢 Servidor ONLINE: ${online}/${max}`);
   } catch (err) {
-    console.error('⚠️ Erro ao buscar status.json:', err.message);
-    setOfflinePresence();
+    // se der erro na requisição, também considera OFFLINE
+    console.error('Erro ao consultar STATUS_URL:', err.message);
+    await client.user.setPresence({
+      status: 'dnd',
+      activities: [
+        {
+          name: 'Servidor OFFLINE',
+          type: ActivityType.Custom,
+          state: '🔴 Servidor OFFLINE'
+        }
+      ]
+    });
   }
 }
 
 client.once('ready', () => {
   console.log(`✅ Logado como ${client.user.tag}`);
-
-  // Atualiza imediatamente
   updatePresence();
-
-  // E depois a cada 30 segundos
-  setInterval(updatePresence, 30_000);
+  setInterval(updatePresence, 60_000); // a cada 60s
 });
 
 client.login(token);
