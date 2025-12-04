@@ -1,9 +1,8 @@
 // Bot Discord - FICA ONLINE SÓ SE O SERVIDOR RUST RESPONDER
-// Simples: se o servidor estiver ONLINE → bot liga normalmente
-// Se o servidor estiver OFFLINE → bot NÃO inicia e encerra automaticamente
+// Se o servidor estiver ONLINE → bot liga
+// Se o servidor estiver OFFLINE → processo encerra (bot off)
 
 import { Client, GatewayIntentBits, ActivityType } from 'discord.js'
-import Gamedig from 'gamedig'
 import Gamedig from 'gamedig'
 
 // ===========================
@@ -14,7 +13,7 @@ const RUST_IP = process.env.RUST_IP || '198.1.195.53'
 const RUST_QUERY_PORT = Number(process.env.RUST_QUERY_PORT || 28017)
 
 if (!TOKEN) {
-  console.error('❌ ERRO: TOKEN não configurado no .env (variável TOKEN).')
+  console.error('❌ ERRO: TOKEN não configurado na variável de ambiente TOKEN.')
   process.exit(1)
 }
 
@@ -29,7 +28,8 @@ async function rustOnline() {
       port: RUST_QUERY_PORT
     })
     return true
-  } catch {
+  } catch (err) {
+    console.log('Servidor Rust não respondeu:', err.message)
     return false
   }
 }
@@ -59,16 +59,17 @@ async function start() {
 
   if (!online) {
     console.log('⛔ Servidor Rust está OFFLINE → Bot será desligado.')
-    process.exit(0) // encerra o processo no Railway/PM2
+    process.exit(0)
   }
 
   console.log('✅ Servidor ONLINE → Bot iniciando...')
 
-  client.login(TOKEN)
-    .catch(err => {
-      console.error('❌ Erro ao logar bot:', err)
-      process.exit(1)
-    })
+  try {
+    await client.login(TOKEN)
+  } catch (err) {
+    console.error('❌ Erro ao logar bot:', err)
+    process.exit(1)
+  }
 }
 
 start()
