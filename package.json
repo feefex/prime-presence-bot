@@ -2,12 +2,11 @@
   "name": "prime-presence-bot",
   "version": "1.0.0",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.16.0",
-    "gamedig": "^4.0.0"
+    "axios": "^1.7.9"
   }
 }
