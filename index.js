@@ -1,7 +1,7 @@
 const { Client, GatewayIntentBits, ActivityType } = require("discord.js");
 const axios = require("axios");
 
-// Variáveis de ambiente do Railway
+// Variáveis dee ambiente do Railway
 const TOKEN = process.env.BOT_TOKEN;
 const STATUS_URL = process.env.STATUS_URL || "https://primextincao.com/status.json";
 const UPDATE_INTERVAL = Number(process.env.UPDATE_INTERVAL || 30000); // 30s
