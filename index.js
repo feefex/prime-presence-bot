@@ -1,17 +1,19 @@
-// index.js
-import axios from 'axios';
-import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
+client.login(BOT_TOKEN);
+const { Client, GatewayIntentBits, ActivityType } = require("discord.js");
+const axios = require("axios");
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const STATUS_URL = process.env.STATUS_URL;
+// Variáveis de ambiente do Railway
+const TOKEN = process.env.BOT_TOKEN;
+const STATUS_URL = process.env.STATUS_URL || "https://primextincao.com/status.json";
+const UPDATE_INTERVAL = Number(process.env.UPDATE_INTERVAL || 30000); // 30s
 
-if (!BOT_TOKEN) {
-  console.error('❌ BOT_TOKEN não definido nas variáveis de ambiente');
+if (!TOKEN) {
+  console.error("ERRO: BOT_TOKEN não definido nas variáveis de ambiente.");
   process.exit(1);
 }
 
 if (!STATUS_URL) {
-  console.error('❌ STATUS_URL não definido nas variáveis de ambiente');
+  console.error("ERRO: STATUS_URL não definido nas variáveis de ambiente.");
   process.exit(1);
 }
 
@@ -19,79 +21,37 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-async function buscarStatus() {
+async function atualizarStatus() {
   try {
     const response = await axios.get(STATUS_URL, { timeout: 5000 });
     const data = response.data;
 
-    // LOG pra debug – aparece em Deploy Logs do Railway
-    console.log('[STATUS JSON]', JSON.stringify(data));
+    const online = data.online ?? 0;
+    const max = data.max ?? 0;
 
-    let activityText = '🔴 Servidor OFFLINE';
-    let statusDiscord = 'dnd'; // "ocupado" (vermelho)
-
-    if (data && typeof data === 'object') {
-      // Alguns jeitos comuns de marcar offline no JSON
-      const offlineFlags = [
-        data.online === false,
-        String(data.status).toLowerCase() === 'offline',
-        String(data.slots).toLowerCase() === 'offline'
-      ];
-
-      const isOffline = offlineFlags.some(Boolean);
-
-      if (!isOffline) {
-        // Tenta descobrir players e maxPlayers em vários nomes possíveis
-        const players = Number(
-          data.playersOnline ??
-          data.players ??
-          data.onlinePlayers ??
-          data.player_count ??
-          0
-        );
-
-        const maxPlayers = Number(
-          data.maxPlayers ??
-          data.max_players ??
-          data.slotsMax ??
-          data.max ??
-          data.max_player_count ??
-          0
-        );
-
-        if (!Number.isNaN(maxPlayers) && maxPlayers > 0) {
-          activityText = `🟢 ${players}/${maxPlayers} jogadores online`;
-        } else {
-          activityText = `🟢 ${players} jogadores online`;
+    await client.user.setPresence({
+      activities: [
+        {
+          name: `🟢${online}/${max} jogadores online`,
+          type: ActivityType.Playing
         }
-
-        statusDiscord = 'online';
-      }
-    }
-
-    client.user.setPresence({
-      activities: [{ name: activityText, type: ActivityType.Playing }],
-      status: statusDiscord
+      ],
+      status: "online"
     });
 
+    console.log(`Status atualizado: ${online}/${max}`);
   } catch (err) {
-    console.error('Erro ao buscar STATUS_URL:', err.message || err);
-    // Se der erro (site fora, JSON quebrado, etc), consideramos OFFLINE
-    client.user.setPresence({
-      activities: [{ name: '🔴 Servidor OFFLINE', type: ActivityType.Playing }],
-      status: 'dnd'
-    });
+    console.error("Erro ao atualizar status:", err.message);
   }
 }
 
-client.once('ready', () => {
-  console.log(`✅ Logado como ${client.user.tag}`);
-
-  // Atualiza logo que liga
-  buscarStatus();
-
-  // E depois de tempos em tempos (ex.: 30 segundos)
-  setInterval(buscarStatus, 30 * 1000);
+client.once("ready", () => {
+  console.log(`Bot logado como ${client.user.tag}`);
+  atualizarStatus();
+  setInterval(atualizarStatus, UPDATE_INTERVAL);
 });
 
-client.login(BOT_TOKEN);
+client.login(TOKEN).catch(err => {
+  console.error("Erro ao logar no Discord:", err.message);
+  process.exit(1);
+});
