@@ -1,78 +1,97 @@
-// index.js
 import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
+import fetch from 'node-fetch';
 
-const TOKEN = process.env.BOT_TOKEN;
-const STATUS_URL = process.env.STATUS_URL;
+const token = process.env.BOT_TOKEN;
+const statusUrl = process.env.STATUS_URL;
+
+if (!token) {
+  console.error('❌ BOT_TOKEN não definido nas variáveis de ambiente');
+  process.exit(1);
+}
+
+if (!statusUrl) {
+  console.error('❌ STATUS_URL não definido nas variáveis de ambiente');
+  process.exit(1);
+}
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
 });
 
-// Busca o status no seu status.json
-async function getStatus() {
-  try {
-    const res = await fetch(STATUS_URL, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    return data;
-  } catch (err) {
-    console.error('Erro ao buscar status:', err.message);
-    return null;
-  }
+function setOfflinePresence() {
+  client.user.setPresence({
+    activities: [
+      {
+        name: 'Servidor OFFLINE',
+        type: ActivityType.Custom,
+        state: '🔴 Servidor OFFLINE',
+      },
+    ],
+    status: 'dnd', // vermelho
+  });
+
+  console.log('🔴 Presença atualizada: Servidor OFFLINE');
 }
 
-// Atualiza a presença do bot
 async function updatePresence() {
-  const status = await getStatus();
+  try {
+    const res = await fetch(statusUrl, {
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    });
 
-  // Qualquer problema => OFFLINE
-  if (
-    !status ||
-    !status.online ||
-    typeof status.players !== 'number' ||
-    typeof status.maxPlayers !== 'number'
-  ) {
-    await setOfflinePresence();
-    return;
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+
+    // Seu status.json hoje está assim:
+    // { "online": 2, "max": 100, "timestamp": 1764813350 }
+
+    const online = Number(data.online);
+    const max =
+      data.max !== undefined
+        ? Number(data.max)
+        : data.maxPlayers !== undefined
+        ? Number(data.maxPlayers)
+        : 0;
+
+    // Se não conseguiu ler números válidos, ou max <= 0, consideramos OFFLINE
+    if (!Number.isFinite(online) || !Number.isFinite(max) || max <= 0) {
+      setOfflinePresence();
+      return;
+    }
+
+    const activityText = `${online}/${max} jogadores online`;
+
+    client.user.setPresence({
+      activities: [
+        {
+          name: activityText,
+          type: ActivityType.Playing,
+        },
+      ],
+      // Mantém o status verde mesmo com 0 players
+      status: 'online',
+    });
+
+    console.log(`🟢 Presença atualizada: ${activityText}`);
+  } catch (err) {
+    console.error('⚠️ Erro ao buscar status.json:', err.message);
+    setOfflinePresence();
   }
-
-  const { players, maxPlayers } = status;
-
-  await client.user.setPresence({
-    status: 'online',
-    activities: [
-      {
-        type: ActivityType.Watching,
-        name: `🟢 ${players}/${maxPlayers} jogadores online`,
-      },
-    ],
-  });
-
-  console.log(`Atualizei presença: ${players}/${maxPlayers} online`);
 }
 
-// Presença quando servidor estiver offline
-async function setOfflinePresence() {
-  await client.user.setPresence({
-    status: 'dnd',
-    activities: [
-      {
-        type: ActivityType.Watching,
-        name: '🔴 Servidor OFFLINE',
-      },
-    ],
-  });
-
-  console.log('Servidor OFFLINE – presença ajustada');
-}
-
-// Quando o bot logar
 client.once('ready', () => {
-  console.log(`Logado como ${client.user.tag}`);
+  console.log(`✅ Logado como ${client.user.tag}`);
 
-  // Atualiza na hora e depois a cada 30s
+  // Atualiza imediatamente
   updatePresence();
+
+  // E depois a cada 30 segundos
   setInterval(updatePresence, 30_000);
 });
 
-client.login(TOKEN);
+client.login(token);
