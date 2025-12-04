@@ -1,5 +1,4 @@
 // index.js
-import 'dotenv/config';
 import axios from 'axios';
 import { Client, GatewayIntentBits, ActivityType } from 'discord.js';
 
