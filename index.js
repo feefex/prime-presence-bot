@@ -1,75 +1,58 @@
-// Bot Discord - FICA ONLINE SÓ SE O SERVIDOR RUST RESPONDER
-// Se o servidor estiver ONLINE → bot liga
-// Se o servidor estiver OFFLINE → processo encerra (bot off)
+const { Client, GatewayIntentBits, ActivityType } = require("discord.js");
+const axios = require("axios");
 
-import { Client, GatewayIntentBits, ActivityType } from 'discord.js'
-import Gamedig from 'gamedig'
-
-// ===========================
-// VARIÁVEIS DE AMBIENTE
-// ===========================
-const TOKEN = process.env.TOKEN
-const RUST_IP = process.env.RUST_IP || '198.1.195.53'
-const RUST_QUERY_PORT = Number(process.env.RUST_QUERY_PORT || 28017)
+// Variáveis de ambiente do Railway
+const TOKEN = process.env.BOT_TOKEN;
+const STATUS_URL = process.env.STATUS_URL || "https://primextincao.com/status.json";
+const UPDATE_INTERVAL = Number(process.env.UPDATE_INTERVAL || 30000); // 30s
 
 if (!TOKEN) {
-  console.error('❌ ERRO: TOKEN não configurado na variável de ambiente TOKEN.')
-  process.exit(1)
+  console.error("ERRO: BOT_TOKEN não definido nas variáveis de ambiente.");
+  process.exit(1);
 }
 
-// ===========================
-// FUNÇÃO PARA CHECAR SERVIDOR RUST
-// ===========================
-async function rustOnline() {
-  try {
-    await Gamedig.query({
-      type: 'rust',
-      host: RUST_IP,
-      port: RUST_QUERY_PORT
-    })
-    return true
-  } catch (err) {
-    console.log('Servidor Rust não respondeu:', err.message)
-    return false
-  }
+if (!STATUS_URL) {
+  console.error("ERRO: STATUS_URL não definido nas variáveis de ambiente.");
+  process.exit(1);
 }
 
-// ===========================
-// BOT DISCORD
-// ===========================
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
-})
+});
 
-client.on('ready', () => {
-  console.log(`🤖 Bot iniciado: ${client.user.tag}`)
-  client.user.setPresence({
-    activities: [{ name: 'Servidor ONLINE', type: ActivityType.Playing }],
-    status: 'online'
-  })
-})
-
-// ===========================
-// SISTEMA PRINCIPAL
-// ===========================
-async function start() {
-  console.log('🔍 Verificando servidor Rust...')
-
-  const online = await rustOnline()
-
-  if (!online) {
-    console.log('⛔ Servidor Rust está OFFLINE → Bot será desligado.')
-    process.exit(0)
-  }
-
-  console.log('✅ Servidor ONLINE → Bot iniciando...')
-
+async function atualizarStatus() {
   try {
-    await client.login(TOKEN)
+    const response = await axios.get(STATUS_URL, { timeout: 5000 });
+    const data = response.data || {};
+
+    const online = data.online ?? 0;
+    const max = data.max ?? 0;
+
+    await client.user.setPresence({
+      activities: [
+        {
+          name: `${online}/${max} jogadores online`,
+          type: ActivityType.Playing
+        }
+      ],
+      status: "online"
+    });
+
+    console.log(`Status atualizado: ${online}/${max}`);
   } catch (err) {
-    console.error('❌ Erro ao logar bot:', err)
-    process.exit(1)
+    console.error("Erro ao atualizar status (talvez servidor esteja OFF):", err.message);
+    console.log("Desligando bot para ficar OFF junto com o servidor.");
+    process.exit(0); // encerra o processo → bot some do Discord
   }
 }
 
-start()
+client.once("ready", () => {
+  console.log(`Bot logado como ${client.user.tag}`);
+  atualizarStatus();
+  setInterval(atualizarStatus, UPDATE_INTERVAL);
+});
+
+client.login(TOKEN).catch(err => {
+  console.error("Erro ao logar no Discord:", err.message);
+  process.exit(1);
+});
