@@ -1,12 +1,13 @@
-// import "dotenv/config";  // removido porque o Railway não usa dotenv
+// index.js original (versão funcional com online/offline)
+// import "dotenv/config";  // removido para evitar erro no Railway
 import axios from "axios";
 import { Client, GatewayIntentBits, ActivityType } from "discord.js";
 
 // -------------------------------
 // Variáveis de ambiente
 // -------------------------------
-const TOKEN = process.env.BOT_TOKEN || "";
-const STATUS_URL = process.env.STATUS_URL || "";
+const TOKEN = process.env.BOT_TOKEN || ""; // fallback vazio
+const STATUS_URL = process.env.STATUS_URL || ""; // fallback vazio
 
 if (!TOKEN) {
   console.error("❌ BOT_TOKEN não definido nas variáveis de ambiente");
@@ -39,8 +40,9 @@ function extrairJogadores(data) {
   if (typeof data.players === "number") return data.players;
   if (typeof data.player_count === "number") return data.player_count;
   if (typeof data.players_online === "number") return data.players_online;
+  if (typeof data.online === "number") return data.online; // valor real do seu status.json
 
-  // Alguns endpoints usam estrutura aninhada
+  // Estrutura aninhada
   if (data.players && typeof data.players.online === "number")
     return data.players.online;
 
@@ -83,6 +85,34 @@ async function atualizarStatus() {
     } else {
       console.error("Erro:", err.message);
     }
+
+    client.user.setPresence({
+      activities: [
+        {
+          name: `🔴 Servidor OFFLINE`,
+          type: ActivityType.Playing,
+        },
+      ],
+      status: "dnd",
+    });
+  }
+}
+
+    const jogadores = data.players;
+
+    client.user.setPresence({
+      activities: [
+        {
+          name: `${jogadores}/50 jogadores online`,
+          type: ActivityType.Playing,
+        },
+      ],
+      status: "online",
+    });
+
+    console.log(`🟢 Servidor ONLINE — ${jogadores} jogadores`);
+  } catch (err) {
+    console.error("🔴 Erro ao obter status, definindo como OFFLINE", err.message);
 
     client.user.setPresence({
       activities: [
