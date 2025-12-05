@@ -1,13 +1,13 @@
 // index.js original (versão funcional com online/offline)
-import "dotenv/config";
+// import "dotenv/config";  // removido para evitar erro no Railway
 import axios from "axios";
 import { Client, GatewayIntentBits, ActivityType } from "discord.js";
 
 // -------------------------------
 // Variáveis de ambiente
 // -------------------------------
-const TOKEN = process.env.BOT_TOKEN;
-const STATUS_URL = process.env.STATUS_URL;
+const TOKEN = process.env.BOT_TOKEN || ""; // fallback vazio
+const STATUS_URL = process.env.STATUS_URL || ""; // fallback vazio
 
 if (!TOKEN) {
   console.error("❌ BOT_TOKEN não definido nas variáveis de ambiente");
