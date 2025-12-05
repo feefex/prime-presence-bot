@@ -1,12 +1,13 @@
-// import "dotenv/config";  // removido porque o Railway não usa dotenv
+// index.js original (versão funcional com online/offline)
+// import "dotenv/config";  // removido para evitar erro no Railway
 import axios from "axios";
 import { Client, GatewayIntentBits, ActivityType } from "discord.js";
 
 // -------------------------------
 // Variáveis de ambiente
 // -------------------------------
-const TOKEN = process.env.BOT_TOKEN || "";
-const STATUS_URL = process.env.STATUS_URL || "";
+const TOKEN = process.env.BOT_TOKEN || ""; // fallback vazio
+const STATUS_URL = process.env.STATUS_URL || ""; // fallback vazio
 
 if (!TOKEN) {
   console.error("❌ BOT_TOKEN não definido nas variáveis de ambiente");
@@ -35,34 +36,15 @@ client.once("ready", () => {
 function extrairJogadores(data) {
   if (!data) return null;
 
-  // Debug extra pra ver nos logs
-  console.log("🔍 Debug campos:", {
-    online: data.online,
-    typeOnline: typeof data.online,
-    players: data.players,
-    typePlayers: typeof data.players,
-  });
+  // Formatos possíveis
+  if (typeof data.players === "number") return data.players;
+  if (typeof data.player_count === "number") return data.player_count;
+  if (typeof data.players_online === "number") return data.players_online;
+  if (typeof data.online === "number") return data.online; // valor real do seu status.json
 
-  // 1) PRIORIDADE: campo "online" (teu status.json usa isso)
-  if (Object.prototype.hasOwnProperty.call(data, "online")) {
-    const n = Number(data.online);
-    if (!Number.isNaN(n)) return n;
-  }
-
-  // 2) Outros nomes comuns
-  const candidates = ["players", "player_count", "players_online"];
-  for (const key of candidates) {
-    if (Object.prototype.hasOwnProperty.call(data, key)) {
-      const n = Number(data[key]);
-      if (!Number.isNaN(n)) return n;
-    }
-  }
-
-  // 3) Estrutura aninhada
-  if (data.players && typeof data.players.online !== "undefined") {
-    const n = Number(data.players.online);
-    if (!Number.isNaN(n)) return n;
-  }
+  // Estrutura aninhada
+  if (data.players && typeof data.players.online === "number")
+    return data.players.online;
 
   return null;
 }
@@ -79,6 +61,13 @@ async function atualizarStatus() {
 
     const jogadores = extrairJogadores(data);
 
+    // pega capacidade máxima dinâmica do JSON, com fallback para 50
+    let capacidade = 50;
+    if (typeof data.max !== "undefined") {
+      const n = Number(data.max);
+      if (!Number.isNaN(n) && n > 0) capacidade = n;
+    }
+
     if (jogadores === null || Number.isNaN(jogadores) || jogadores < 0) {
       throw new Error("Não foi possível identificar o campo de jogadores no JSON");
     }
@@ -86,14 +75,14 @@ async function atualizarStatus() {
     client.user.setPresence({
       activities: [
         {
-          name: `${jogadores}/50 jogadores online`,
+          name: `${jogadores}/${capacidade} jogadores online`,
           type: ActivityType.Playing,
         },
       ],
       status: "online",
     });
 
-    console.log(`🟢 Servidor ONLINE — ${jogadores} jogadores`);
+    console.log(`🟢 Servidor ONLINE — ${jogadores}/${capacidade}`);
   } catch (err) {
     console.error("🔴 Erro ao obter status, definindo como OFFLINE");
 
